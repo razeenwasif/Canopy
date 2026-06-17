@@ -39,15 +39,31 @@ and reports back over a channel, so a slow compile never blocks typing.
 | --- | --- |
 | `main.rs` | CLI parsing (clap), terminal lifecycle (`ratatui::init/restore`), wiring |
 | `config.rs` | Compile settings: image, engine, timeout, memory limit |
-| `app.rs` | State machine (Browser ⨉ Editor) + the `select!` event loop |
-| `editor/` | The text model: ropey buffer, cursor, movement, editing, scrolling, save |
+| `theme.rs` | Color palette (pink accent) + style helpers |
+| `app.rs` | State machine (Browser ⨉ Editor) + modal key dispatch + `select!` loop |
+| `editor/` | The text model: ropey buffer, cursor, movement, editing, save; `modes.rs` holds the vim `Mode` enum |
 | `fs.rs` | File browser model: directory listing + navigation |
 | `compile.rs` | Sandboxed Docker compilation (bollard) + Docker reachability probe |
 | `pdf.rs` | PDF page rasterization for preview (pdfium-render) |
-| `ui/` | Pure rendering: `browser`, `editor`, `preview`, status bar |
+| `ui/` | Pure rendering: `title_bar`, `browser`, `editor`, `preview`, `status` (mode line) |
 
 The `ui` layer is **pure**: it reads `App` state and paints a frame, never
 mutating. All state transitions happen in `app.rs`.
+
+## Modal editing
+
+The editor is **vim-style modal** (`editor/modes.rs`): `Normal`, `Insert`, and
+`Command` (the `:` line). `app.rs` dispatches each keypress by the editor's
+current mode. Two-key sequences (`dd`, `gg`) are handled with a single
+`pending_op` slot rather than a full key-sequence parser. The bottom status line
+renders a colored mode block (accent for Normal, reversed accent for Insert,
+info for Command) so the active mode is always visible — matching the Onyx UI.
+
+## Theme
+
+`theme.rs` defines a dark palette with a pink accent and a set of `Style`
+helpers (`s_accent`, `s_border_focus`, `s_selection`, …). Panes use rounded
+borders that turn bold-accent when focused (`ui::pane_block`).
 
 ## The editor model
 

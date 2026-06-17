@@ -64,6 +64,14 @@ impl Browser {
         self.selected = self.selected.saturating_sub(1);
     }
 
+    pub fn select_first(&mut self) {
+        self.selected = 0;
+    }
+
+    pub fn select_last(&mut self) {
+        self.selected = self.entries.len().saturating_sub(1);
+    }
+
     /// Activate the current selection: descend into a directory or open a file.
     pub fn activate(&mut self) -> Result<Activate> {
         let Some(entry) = self.entries.get(self.selected) else {

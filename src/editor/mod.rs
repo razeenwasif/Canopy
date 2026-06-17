@@ -12,6 +12,9 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result};
 use ropey::Rope;
 
+mod modes;
+pub use modes::Mode;
+
 pub struct Editor {
     rope: Rope,
     /// Cursor position as a character index into the rope.
@@ -25,6 +28,8 @@ pub struct Editor {
     path: Option<PathBuf>,
     /// Unsaved changes since the last load/save.
     dirty: bool,
+    /// Current modal-editing mode (vim-style).
+    mode: Mode,
 }
 
 impl Editor {
@@ -37,6 +42,7 @@ impl Editor {
             desired_col: 0,
             path: None,
             dirty: false,
+            mode: Mode::Normal,
         }
     }
 
@@ -51,6 +57,7 @@ impl Editor {
             desired_col: 0,
             path: Some(path.to_path_buf()),
             dirty: false,
+            mode: Mode::Normal,
         })
     }
 
@@ -82,6 +89,14 @@ impl Editor {
 
     pub fn path(&self) -> Option<&Path> {
         self.path.as_deref()
+    }
+
+    pub fn mode(&self) -> Mode {
+        self.mode
+    }
+
+    pub fn set_mode(&mut self, mode: Mode) {
+        self.mode = mode;
     }
 
     /// Zero-based (line, column) of the cursor.
@@ -186,6 +201,150 @@ impl Editor {
         }
     }
 
+    // ─── Vim normal-mode operations ───────────────────────────────────────
+
+    /// `i` — insert before the cursor.
+    pub fn enter_insert(&mut self) {
+        self.mode = Mode::Insert;
+    }
+
+    /// `Esc` — leave insert mode, nudging the cursor back one column (vim).
+    pub fn exit_insert(&mut self) {
+        self.mode = Mode::Normal;
+        let (_, col) = self.cursor_line_col();
+        if col > 0 {
+            self.cursor -= 1;
+        }
+        self.sync_desired_col();
+    }
+
+    /// `a` — insert after the cursor.
+    pub fn enter_insert_after(&mut self) {
+        let (line, _) = self.cursor_line_col();
+        if self.cursor < self.rope.line_to_char(line) + self.line_len(line) {
+            self.cursor += 1;
+        }
+        self.mode = Mode::Insert;
+        self.sync_desired_col();
+    }
+
+    /// `A` — insert at end of line.
+    pub fn enter_insert_eol(&mut self) {
+        self.move_end();
+        self.mode = Mode::Insert;
+    }
+
+    /// `I` — insert at start of line.
+    pub fn enter_insert_bol(&mut self) {
+        self.move_home();
+        self.mode = Mode::Insert;
+    }
+
+    /// `o` — open a new line below and insert.
+    pub fn open_below(&mut self) {
+        self.move_end();
+        self.rope.insert_char(self.cursor, '\n');
+        self.cursor += 1;
+        self.dirty = true;
+        self.mode = Mode::Insert;
+        self.sync_desired_col();
+    }
+
+    /// `O` — open a new line above and insert.
+    pub fn open_above(&mut self) {
+        let (line, _) = self.cursor_line_col();
+        let line_start = self.rope.line_to_char(line);
+        self.rope.insert_char(line_start, '\n');
+        self.cursor = line_start; // sit on the new empty line
+        self.dirty = true;
+        self.mode = Mode::Insert;
+        self.sync_desired_col();
+    }
+
+    /// `x` — delete the character under the cursor.
+    pub fn delete_under(&mut self) {
+        let (line, _) = self.cursor_line_col();
+        // Don't delete the line's trailing newline with `x`.
+        if self.cursor < self.rope.line_to_char(line) + self.line_len(line) {
+            self.rope.remove(self.cursor..self.cursor + 1);
+            self.dirty = true;
+            self.clamp_to_line();
+        }
+    }
+
+    /// `D` — delete from the cursor to the end of the line.
+    pub fn delete_to_eol(&mut self) {
+        let (line, _) = self.cursor_line_col();
+        let eol = self.rope.line_to_char(line) + self.line_len(line);
+        if self.cursor < eol {
+            self.rope.remove(self.cursor..eol);
+            self.dirty = true;
+        }
+    }
+
+    /// `dd` — delete the current line.
+    pub fn delete_line(&mut self) {
+        let (line, _) = self.cursor_line_col();
+        let start = self.rope.line_to_char(line);
+        let end = if line + 1 < self.rope.len_lines() {
+            self.rope.line_to_char(line + 1)
+        } else {
+            // Last line: also consume the preceding newline if present.
+            self.rope.len_chars()
+        };
+        self.rope.remove(start..end);
+        if start > 0 && line + 1 >= self.rope.len_lines() {
+            // Removed the last line; drop the now-trailing newline.
+            let last = self.rope.len_chars();
+            if last > 0 && self.rope.char(last - 1) == '\n' {
+                self.rope.remove(last - 1..last);
+            }
+        }
+        self.dirty = true;
+        self.cursor = start.min(self.rope.len_chars());
+        self.clamp_to_line();
+        self.sync_desired_col();
+    }
+
+    /// `w` — move to the start of the next word.
+    pub fn move_word_forward(&mut self) {
+        let len = self.rope.len_chars();
+        let mut i = self.cursor;
+        // Skip the current run of word characters, then any whitespace.
+        while i < len && !self.rope.char(i).is_whitespace() {
+            i += 1;
+        }
+        while i < len && self.rope.char(i).is_whitespace() {
+            i += 1;
+        }
+        self.cursor = i;
+        self.sync_desired_col();
+    }
+
+    /// `b` — move to the start of the previous word.
+    pub fn move_word_back(&mut self) {
+        let mut i = self.cursor;
+        while i > 0 && self.rope.char(i - 1).is_whitespace() {
+            i -= 1;
+        }
+        while i > 0 && !self.rope.char(i - 1).is_whitespace() {
+            i -= 1;
+        }
+        self.cursor = i;
+        self.sync_desired_col();
+    }
+
+    /// `gg` — jump to the first line.
+    pub fn move_first_line(&mut self) {
+        self.cursor = self.char_at(0, self.desired_col);
+    }
+
+    /// `G` — jump to the last line.
+    pub fn move_last_line(&mut self) {
+        let last = self.rope.len_lines().saturating_sub(1);
+        self.cursor = self.char_at(last, self.desired_col);
+    }
+
     // ─── Internals ────────────────────────────────────────────────────────
 
     /// Character count of a line, excluding the trailing newline.
@@ -208,6 +367,16 @@ impl Editor {
     fn sync_desired_col(&mut self) {
         let (_, col) = self.cursor_line_col();
         self.desired_col = col;
+    }
+
+    /// Keep the cursor within the current line's text (used after deletes in
+    /// normal mode so it never lands on/after the trailing newline).
+    fn clamp_to_line(&mut self) {
+        let (line, col) = self.cursor_line_col();
+        let max = self.line_len(line);
+        if col > max {
+            self.cursor = self.rope.line_to_char(line) + max;
+        }
     }
 }
 
@@ -272,6 +441,52 @@ mod tests {
         e.move_home();
         e.delete_forward();
         assert_eq!(e.rope().to_string(), "b");
+        assert_eq!(e.cursor_line_col(), (0, 0));
+    }
+
+    #[test]
+    fn vim_insert_mode_and_x() {
+        let mut e = typed("abc"); // default mode is Normal; cursor at (0,3)
+        e.enter_insert();
+        assert_eq!(e.mode(), Mode::Insert);
+        e.exit_insert(); // back to Normal, nudging left: col 3 → 2
+        assert_eq!(e.mode(), Mode::Normal);
+        assert_eq!(e.cursor_line_col(), (0, 2));
+        e.move_home();
+        e.delete_under(); // x on 'a'
+        assert_eq!(e.rope().to_string(), "bc");
+    }
+
+    #[test]
+    fn vim_dd_deletes_line() {
+        let mut e = typed("one\ntwo\nthree");
+        e.exit_insert();
+        e.move_first_line(); // gg
+        e.delete_line(); // dd
+        assert_eq!(e.rope().to_string(), "two\nthree");
+        assert_eq!(e.cursor_line_col(), (0, 0));
+    }
+
+    #[test]
+    fn vim_open_below_inserts_line() {
+        let mut e = typed("top");
+        e.exit_insert();
+        e.open_below(); // o
+        assert_eq!(e.mode(), Mode::Insert);
+        e.insert_char('x');
+        assert_eq!(e.rope().to_string(), "top\nx");
+        assert_eq!(e.cursor_line_col(), (1, 1));
+    }
+
+    #[test]
+    fn vim_word_motion() {
+        let mut e = typed("alpha beta gamma");
+        e.exit_insert();
+        e.move_first_line();
+        e.move_home();
+        e.move_word_forward(); // → start of "beta"
+        assert_eq!(e.cursor_line_col(), (0, 6));
+        e.move_word_back(); // → start of "alpha"
         assert_eq!(e.cursor_line_col(), (0, 0));
     }
 

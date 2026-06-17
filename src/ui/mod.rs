@@ -1,55 +1,73 @@
 //! Rendering. All drawing is pure: it reads `App` state and paints a frame,
-//! never mutating state. The app loop calls `render` every tick.
+//! never mutating state. Layout mirrors Onyx: a one-row title bar on top, a
+//! one-row mode/status line on the bottom, and the body in between.
 
 mod browser;
 mod editor;
 mod preview;
+mod status;
+mod title_bar;
 
-use ratatui::layout::{Constraint, Direction, Layout, Rect};
-use ratatui::style::{Color, Style};
-use ratatui::text::Line;
-use ratatui::widgets::{Block, Borders, Paragraph};
+use ratatui::layout::{Constraint, Direction, Layout};
+use ratatui::style::Style;
+use ratatui::text::Span;
+use ratatui::widgets::{Block, BorderType, Borders};
 use ratatui::Frame;
 
 use crate::app::{App, Screen};
+use crate::theme::Theme;
 
 pub fn render(app: &App, frame: &mut Frame) {
-    // Body + a one-line status bar.
-    let chunks = Layout::default()
+    let area = frame.area();
+    // Paint the base background so gaps between panes use the theme color.
+    frame.render_widget(Block::default().style(Style::default().bg(app.theme.bg)), area);
+
+    let outer = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([Constraint::Min(1), Constraint::Length(1)])
-        .split(frame.area());
+        .constraints([
+            Constraint::Length(1), // title bar
+            Constraint::Min(0),    // body
+            Constraint::Length(1), // mode / status line
+        ])
+        .split(area);
+
+    title_bar::render(app, frame, outer[0]);
 
     match &app.screen {
-        Screen::Browser => browser::render(app, frame, chunks[0]),
+        Screen::Browser => browser::render(app, frame, outer[1]),
         Screen::Editor { show_preview } => {
             if *show_preview {
                 let panes = Layout::default()
                     .direction(Direction::Horizontal)
                     .constraints([Constraint::Percentage(55), Constraint::Percentage(45)])
-                    .split(chunks[0]);
+                    .split(outer[1]);
                 editor::render(app, frame, panes[0]);
                 preview::render(app, frame, panes[1]);
             } else {
-                editor::render(app, frame, chunks[0]);
+                editor::render(app, frame, outer[1]);
             }
         }
     }
 
-    render_status_bar(app, frame, chunks[1]);
+    status::render(app, frame, outer[2]);
 }
 
-fn render_status_bar(app: &App, frame: &mut Frame, area: Rect) {
-    let hint = match app.screen {
-        Screen::Browser => "↑/↓ move · Enter open · ← up · Ctrl-Q quit",
-        Screen::Editor { .. } => "Ctrl-S save · Ctrl-B compile · Ctrl-P preview · Esc files",
+/// A themed pane block: rounded borders, accent + bold when focused.
+pub(crate) fn pane_block(title: &str, focused: bool, theme: &Theme) -> Block<'static> {
+    let border_style = if focused {
+        theme.s_border_focus()
+    } else {
+        theme.s_border()
     };
-    let line = Line::from(format!(" {}  │  {hint}", app.status));
-    let bar = Paragraph::new(line).style(Style::default().bg(Color::DarkGray).fg(Color::White));
-    frame.render_widget(bar, area);
-}
-
-/// Shared helper: a titled bordered block.
-pub(crate) fn panel(title: String) -> Block<'static> {
-    Block::default().borders(Borders::ALL).title(title)
+    let title_style = if focused {
+        theme.s_accent()
+    } else {
+        Style::default().fg(theme.fg_dim)
+    };
+    Block::default()
+        .borders(Borders::ALL)
+        .border_type(BorderType::Rounded)
+        .border_style(border_style)
+        .title(Span::styled(format!(" {title} "), title_style))
+        .style(Style::default().bg(theme.bg))
 }

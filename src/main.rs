@@ -16,6 +16,7 @@ mod config;
 mod editor;
 mod fs;
 mod pdf;
+mod theme;
 mod ui;
 
 use std::path::PathBuf;

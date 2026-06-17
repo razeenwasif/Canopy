@@ -10,8 +10,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Terminal text editor backed by a ropey buffer: cursor movement (arrows,
   Home/End, PageUp/PageDown) with a sticky desired column, insert/newline/
   backspace/delete editing, vertical scrolling, and save to disk.
-- File browser: navigate directories and open files.
-- Line-number gutter and hardware cursor positioning.
+- Vim-style modal editing (Normal / Insert / Command) with motions (`h j k l`,
+  `w`, `b`, `0`, `$`, `gg`, `G`), edits (`i a I A`, `o`, `O`, `x`, `dd`, `D`),
+  and a `:` command line (`:w`, `:q`, `:wq`, `:q!`, `:e`, `:make`).
+- Pink-accented theme modeled on the Onyx app: rounded theme-colored pane
+  borders (bold accent when focused), a top title bar, and a bottom mode line
+  with a colored mode block.
+- File browser: navigate directories and open files (vim keys).
+- Line-number gutter (active line in accent) and hardware cursor positioning.
 - Sandboxed-compilation scaffolding (`compile.rs`) with a Docker reachability
   probe and the security constraints expressed in config.
 - Inline PDF preview scaffolding (`pdf.rs`, `ui/preview.rs`).

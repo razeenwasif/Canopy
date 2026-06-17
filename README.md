@@ -37,8 +37,19 @@ Options (also via env): `--texlive-image`, `--engine`, `--timeout-secs`,
 
 ### Keys
 
-**Browser:** `↑/↓` move · `Enter` open / enter dir · `←`/`Backspace` up · `q`/`Ctrl-Q` quit
-**Editor:** type to edit · arrows/Home/End/PgUp/PgDn move · `Ctrl-S` save · `Ctrl-B` compile · `Ctrl-P` toggle preview · `Esc` back to browser
+The editor is **modal** (vim-style), with a pink-accented theme modeled on Onyx.
+
+**Browser:** `j/k` move · `gg`/`G` top/bottom · `Enter`/`l` open · `h`/`Backspace` up · `q` quit
+
+**Editor — Normal:** `h j k l` move · `w`/`b` word · `0`/`$` line ends · `gg`/`G` file ends ·
+`i a I A` insert · `o`/`O` open line · `x` delete char · `dd` delete line · `D` delete to EOL ·
+`Ctrl-D`/`Ctrl-U` half-page · `Ctrl-O` file browser · `:` command line
+
+**Editor — Insert:** type to edit · `Esc` to Normal · arrows/Home/End/PgUp/PgDn move
+
+**Command line:** `:w` write · `:q` quit · `:wq`/`:x` write & quit · `:q!` discard · `:e` browser · `:make` compile
+
+**Any mode:** `Ctrl-S` save · `Ctrl-B` compile · `Ctrl-P` toggle preview · `Ctrl-C` quit
 
 ## Runtime requirements
 
