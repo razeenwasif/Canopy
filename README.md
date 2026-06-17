@@ -37,13 +37,16 @@ Options (also via env): `--texlive-image`, `--engine`, `--timeout-secs`,
 
 ### Keys
 
-The editor is **modal** (vim-style), with a pink-accented theme modeled on Onyx.
+The editor is **modal** (vim-style), with a pink-accented theme modeled on Onyx,
+**LaTeX syntax highlighting**, and a built-in **fuzzy file finder** (`Ctrl-F`).
 
-**Browser:** `j/k` move · `gg`/`G` top/bottom · `Enter`/`l` open · `h`/`Backspace` up · `q` quit
+**Browser:** `j/k` move · `gg`/`G` top/bottom · `Enter`/`l` open · `h`/`Backspace` up · `/` or `Ctrl-F` fuzzy find · `q` quit
+
+**Fuzzy finder (`Ctrl-F`):** type to filter · `↑/↓` or `Ctrl-P`/`Ctrl-N` move · `Enter` open · `Esc` close
 
 **Editor — Normal:** `h j k l` move · `w`/`b` word · `0`/`$` line ends · `gg`/`G` file ends ·
 `i a I A` insert · `o`/`O` open line · `x` delete char · `dd` delete line · `D` delete to EOL ·
-`Ctrl-D`/`Ctrl-U` half-page · `Ctrl-O` file browser · `:` command line
+`Ctrl-F` fuzzy find · `Ctrl-D`/`Ctrl-U` half-page · `Ctrl-O` file browser · `:` command line
 
 **Editor — Insert:** type to edit · `Esc` to Normal · arrows/Home/End/PgUp/PgDn move
 

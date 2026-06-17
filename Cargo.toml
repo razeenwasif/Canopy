@@ -24,6 +24,10 @@ image = "0.25"
 # ─── Editor text buffer ───────────────────────────────────────────────────
 ropey = "1.6"
 
+# ─── Fuzzy file finder (fzf-style) ────────────────────────────────────────
+fuzzy-matcher = "0.3"
+walkdir = "2"
+
 # ─── Sandboxed compilation: drive the Docker Engine API directly ──────────
 # Spins up an ephemeral TeX Live container with network=none, a memory cap,
 # and a hard timeout — the security model from the original design, run locally.

@@ -16,6 +16,7 @@ use tokio::sync::mpsc;
 use crate::compile::{self, CompileOutcome, CompileRequest};
 use crate::config::Config;
 use crate::editor::{Editor, Mode};
+use crate::finder::Finder;
 use crate::fs::{Activate, Browser};
 use crate::theme::Theme;
 use crate::ui;
@@ -35,6 +36,10 @@ pub struct App {
     pub status: String,
     /// Active `:` command-line text (without the leading colon).
     pub cmdline: String,
+    /// Project root the fuzzy finder walks (the launch directory).
+    pub root: PathBuf,
+    /// The fuzzy file finder overlay, when open.
+    pub finder: Option<Finder>,
     /// First key of a pending two-key normal-mode sequence (`d`, `g`).
     pending_op: Option<char>,
     compile_rx: Option<mpsc::UnboundedReceiver<Result<CompileOutcome>>>,
@@ -43,6 +48,15 @@ pub struct App {
 impl App {
     pub fn new(config: Config, start_path: PathBuf) -> Result<Self> {
         let browser = Browser::new(&start_path)?;
+        // The finder root is the launch directory (parent of a file argument).
+        let root = if start_path.is_dir() {
+            start_path.clone()
+        } else {
+            start_path
+                .parent()
+                .map(Path::to_path_buf)
+                .unwrap_or_else(|| PathBuf::from("."))
+        };
         let (screen, editor, status) = if start_path.is_file() {
             let ed = Editor::open(&start_path)?;
             (
@@ -63,6 +77,8 @@ impl App {
             should_quit: false,
             status,
             cmdline: String::new(),
+            root,
+            finder: None,
             pending_op: None,
             compile_rx: None,
         })
@@ -112,6 +128,11 @@ impl App {
             return Ok(());
         }
 
+        // The fuzzy finder overlay captures all input while open.
+        if self.finder.is_some() {
+            return self.handle_finder_key(key);
+        }
+
         match self.screen {
             Screen::Browser => self.handle_browser_key(key)?,
             Screen::Editor { .. } => match self.editor_mode() {
@@ -134,7 +155,12 @@ impl App {
             self.should_quit = true;
             return Ok(());
         }
+        if is_ctrl(&key, 'f') {
+            self.open_finder();
+            return Ok(());
+        }
         match key.code {
+            KeyCode::Char('/') => self.open_finder(),
             KeyCode::Char('q') => self.should_quit = true,
             KeyCode::Char('j') | KeyCode::Down => self.browser.select_next(),
             KeyCode::Char('k') | KeyCode::Up => self.browser.select_prev(),
@@ -145,6 +171,61 @@ impl App {
                 Activate::Navigated => {}
                 Activate::OpenFile(path) => self.open_file(&path)?,
             },
+            _ => {}
+        }
+        Ok(())
+    }
+
+    // ─── Fuzzy finder overlay ─────────────────────────────────────────────
+
+    fn open_finder(&mut self) {
+        self.finder = Some(Finder::new(&self.root));
+    }
+
+    fn handle_finder_key(&mut self, key: KeyEvent) -> Result<()> {
+        // Ctrl-N / Ctrl-P move the selection (fzf-style), alongside arrows.
+        if is_ctrl(&key, 'n') {
+            if let Some(f) = self.finder.as_mut() {
+                f.move_down();
+            }
+            return Ok(());
+        }
+        if is_ctrl(&key, 'p') {
+            if let Some(f) = self.finder.as_mut() {
+                f.move_up();
+            }
+            return Ok(());
+        }
+
+        match key.code {
+            KeyCode::Esc => self.finder = None,
+            KeyCode::Down => {
+                if let Some(f) = self.finder.as_mut() {
+                    f.move_down();
+                }
+            }
+            KeyCode::Up => {
+                if let Some(f) = self.finder.as_mut() {
+                    f.move_up();
+                }
+            }
+            KeyCode::Backspace => {
+                if let Some(f) = self.finder.as_mut() {
+                    f.pop();
+                }
+            }
+            KeyCode::Enter => {
+                let path = self.finder.as_ref().and_then(|f| f.selected_path()).map(Path::to_path_buf);
+                self.finder = None;
+                if let Some(path) = path {
+                    self.open_file(&path)?;
+                }
+            }
+            KeyCode::Char(c) => {
+                if let Some(f) = self.finder.as_mut() {
+                    f.push(c);
+                }
+            }
             _ => {}
         }
         Ok(())
@@ -293,6 +374,7 @@ impl App {
             KeyCode::Char('s') => self.save(),
             KeyCode::Char('b') => self.start_compile(),
             KeyCode::Char('p') => self.toggle_preview(),
+            KeyCode::Char('f') => self.open_finder(),
             KeyCode::Char('o') => {
                 self.screen = Screen::Browser;
                 self.status = "file browser".to_string();

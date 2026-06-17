@@ -14,8 +14,10 @@ mod app;
 mod compile;
 mod config;
 mod editor;
+mod finder;
 mod fs;
 mod pdf;
+mod syntax;
 mod theme;
 mod ui;
 

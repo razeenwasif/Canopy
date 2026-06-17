@@ -17,6 +17,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   borders (bold accent when focused), a top title bar, and a bottom mode line
   with a colored mode block.
 - File browser: navigate directories and open files (vim keys).
+- Built-in fzf-style fuzzy file finder (`Ctrl-F`): recursive walk + SkimMatcherV2
+  ranking in a centered popup, with `Ctrl-P`/`Ctrl-N` navigation.
+- LaTeX syntax highlighting: a lightweight per-line tokenizer coloring commands,
+  comments, inline math, and grouping with the theme palette.
 - Line-number gutter (active line in accent) and hardware cursor positioning.
 - Sandboxed-compilation scaffolding (`compile.rs`) with a Docker reachability
   probe and the security constraints expressed in config.

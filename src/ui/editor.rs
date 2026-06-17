@@ -8,6 +8,7 @@ use ratatui::Frame;
 
 use crate::app::App;
 use crate::editor::Mode;
+use crate::syntax;
 use crate::ui::pane_block;
 
 pub fn render(app: &App, frame: &mut Frame, area: Rect) {
@@ -35,6 +36,9 @@ pub fn render(app: &App, frame: &mut Frame, area: Rect) {
     let (cur_line, cur_col) = editor.cursor_line_col();
     let gutter_w = total_lines.to_string().len() as u16 + 1;
 
+    // LaTeX highlighting for tex-like files; plain otherwise.
+    let highlight = syntax::is_tex(editor.path().and_then(|p| p.extension()).and_then(|e| e.to_str()));
+
     let mut lines: Vec<Line> = Vec::with_capacity(inner.height as usize);
     for row in 0..inner.height as usize {
         let idx = scroll + row;
@@ -52,10 +56,13 @@ pub fn render(app: &App, frame: &mut Frame, area: Rect) {
         } else {
             theme.s_gutter()
         };
-        lines.push(Line::from(vec![
-            Span::styled(gutter, gutter_style),
-            Span::styled(text, theme.s_normal()),
-        ]));
+        let mut spans = vec![Span::styled(gutter, gutter_style)];
+        if highlight {
+            spans.extend(syntax::highlight_line(&text, theme));
+        } else {
+            spans.push(Span::styled(text, theme.s_normal()));
+        }
+        lines.push(Line::from(spans));
     }
     frame.render_widget(Paragraph::new(lines), inner);
 

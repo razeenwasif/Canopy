@@ -4,11 +4,12 @@
 
 mod browser;
 mod editor;
+mod finder;
 mod preview;
 mod status;
 mod title_bar;
 
-use ratatui::layout::{Constraint, Direction, Layout};
+use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::style::Style;
 use ratatui::text::Span;
 use ratatui::widgets::{Block, BorderType, Borders};
@@ -50,6 +51,23 @@ pub fn render(app: &App, frame: &mut Frame) {
     }
 
     status::render(app, frame, outer[2]);
+
+    // Fuzzy finder overlay sits on top of everything.
+    if app.finder.is_some() {
+        finder::render(app, frame, area);
+    }
+}
+
+/// A centered rect of (width, height) clamped inside `outer`.
+pub(crate) fn centered_rect(width: u16, height: u16, outer: Rect) -> Rect {
+    let w = width.min(outer.width.saturating_sub(4)).max(20);
+    let h = height.min(outer.height.saturating_sub(2)).max(6);
+    Rect {
+        x: outer.x + (outer.width.saturating_sub(w)) / 2,
+        y: outer.y + (outer.height.saturating_sub(h)) / 2,
+        width: w,
+        height: h,
+    }
 }
 
 /// A themed pane block: rounded borders, accent + bold when focused.

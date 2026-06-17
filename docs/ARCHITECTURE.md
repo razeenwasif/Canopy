@@ -42,6 +42,8 @@ and reports back over a channel, so a slow compile never blocks typing.
 | `theme.rs` | Color palette (pink accent) + style helpers |
 | `app.rs` | State machine (Browser ⨉ Editor) + modal key dispatch + `select!` loop |
 | `editor/` | The text model: ropey buffer, cursor, movement, editing, save; `modes.rs` holds the vim `Mode` enum |
+| `finder.rs` | fzf-style fuzzy file finder: recursive walk + SkimMatcherV2 ranking |
+| `syntax.rs` | Lightweight per-line LaTeX syntax highlighter |
 | `fs.rs` | File browser model: directory listing + navigation |
 | `compile.rs` | Sandboxed Docker compilation (bollard) + Docker reachability probe |
 | `pdf.rs` | PDF page rasterization for preview (pdfium-render) |
