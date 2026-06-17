@@ -42,7 +42,9 @@ in the center-right, and the **AI assistant** docked on the right. The editor is
 **modal** (vim-style) with a pink-accented theme modeled on Onyx, **LaTeX syntax
 highlighting**, and a built-in **fuzzy file finder** (`Ctrl-F`).
 
-Toggle panes with `:pdf` and `:ai` (or `Ctrl-P` for the preview).
+`Ctrl-W` cycles focus between the panes; toggle them with `:pdf` and `:ai` (or
+`Ctrl-P` for the preview). The highlights are below — see
+[docs/KEYBINDINGS.md](docs/KEYBINDINGS.md) for the complete reference.
 
 **Browser:** `j/k` move · `gg`/`G` top/bottom · `Enter`/`l` open · `h`/`Backspace` up · `/` or `Ctrl-F` fuzzy find · `q` quit
 
@@ -55,6 +57,8 @@ Toggle panes with `:pdf` and `:ai` (or `Ctrl-P` for the preview).
 **Editor — Insert:** type to edit · `Esc` to Normal · arrows/Home/End/PgUp/PgDn move
 
 **Command line:** `:w` write · `:q` quit · `:wq`/`:x` write & quit · `:q!` discard · `:e` browser · `:make` compile
+
+**PDF preview (`Ctrl-W` to focus):** `j/k/h/l` or arrows scroll · `+`/`-` zoom · `n`/`p` next/prev page · `g`/`G` first/last · `0` reset · `Esc` back to editor
 
 **AI assistant (`Ctrl-A` to focus):** type a question · `Enter` send · `PgUp/PgDn` scroll · `Esc` (or `Ctrl-A`) back to editor · `Esc` while streaming stops it
 
@@ -88,6 +92,7 @@ src/
 
 ## Documentation
 
+- [Keybindings](docs/KEYBINDINGS.md) — full key reference for every context
 - [Architecture](docs/ARCHITECTURE.md) — process model, modules, security model
 - [Roadmap](docs/ROADMAP.md) — phases and status
 - [Contributing](CONTRIBUTING.md) — build, test, conventions

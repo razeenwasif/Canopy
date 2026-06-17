@@ -54,13 +54,17 @@ and reports back over a channel, so a slow compile never blocks typing.
 
 The editor screen is an **Overleaf-style three-pane workspace**: editor (left),
 PDF preview (center-right), and AI assistant (docked right) — each toggleable
-(`:pdf`, `:ai`, `Ctrl-P`). A `Focus` enum (`Editor` / `Ai`) decides which pane
-receives keys; `Ctrl-A` moves focus to the AI input, `Esc` returns it. Only the
-focused pane shows the hardware cursor and a bold-accent border.
+(`:pdf`, `:ai`, `Ctrl-P`). A `Focus` enum (`Editor` / `Preview` / `Ai`) decides
+which pane receives keys; `Ctrl-W` cycles focus, `Ctrl-A` jumps to the AI input,
+`Esc` returns to the editor. Only the focused pane shows the hardware cursor and
+a bold-accent border.
 
-The PDF preview rasterizes page 1 with `pdftoppm` after a successful compile and
-displays it via `ratatui-image`. The image protocol is stateful (it mutates on
-render), so it lives behind a `RefCell` to keep the render path `&App`.
+The preview is a `pdf::PdfView`: it rasterizes a page with `pdftoppm` and holds
+the current page, zoom, and scroll offset. On render it crops the page raster to
+the viewport (zoom shrinks the crop; panning moves it) and builds a
+`ratatui-image` protocol, cached and only rebuilt when the page/zoom/scroll/size
+changes. The picker and view live behind `RefCell`s because the image protocol
+mutates during rendering, which borrows `&App`.
 
 The `ui` layer is **pure**: it reads `App` state and paints a frame, never
 mutating. All state transitions happen in `app.rs`.

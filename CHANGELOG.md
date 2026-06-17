@@ -33,9 +33,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Overleaf-style three-pane workspace: editor (left), PDF preview (center-right),
   and AI assistant docked on the right — each toggleable (`:pdf`, `:ai`,
   `Ctrl-P`), with a focus model (`Ctrl-A`/`Esc`) and focused-pane borders.
-- Inline PDF preview (Phase 4): rasterizes page 1 with `pdftoppm` after a
-  successful compile and displays it via `ratatui-image` (graphics protocol with
-  a half-block fallback).
+- Inline PDF preview (Phase 4): rasterizes pages with `pdftoppm` after a
+  successful compile and displays them via `ratatui-image` (graphics protocol
+  with a half-block fallback). The preview pane is focusable (`Ctrl-W` cycles
+  panes) with scroll (`j/k/h/l`), zoom (`+`/`-`), and page navigation (`n`/`p`,
+  `g`/`G`).
 - Line-number gutter (active line in accent) and hardware cursor positioning.
 - Sandboxed-compilation scaffolding (`compile.rs`) with a Docker reachability
   probe and the security constraints expressed in config.

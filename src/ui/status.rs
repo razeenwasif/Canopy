@@ -63,6 +63,13 @@ fn mode_block(app: &App) -> (&'static str, Style) {
                 .bg(theme.accent_alt)
                 .add_modifier(Modifier::BOLD),
         ),
+        Screen::Editor if app.focus == Focus::Preview => (
+            "PDF",
+            Style::default()
+                .fg(theme.bg)
+                .bg(theme.info)
+                .add_modifier(Modifier::BOLD),
+        ),
         Screen::Editor => match app.editor.as_ref().map(|e| e.mode()).unwrap_or(Mode::Normal) {
             Mode::Insert => (
                 "INSERT",
@@ -90,6 +97,7 @@ fn hint(app: &App) -> &'static str {
     match &app.screen {
         Screen::Browser => "· j/k move · gg/G ends · Enter open · h up · q quit",
         Screen::Editor if app.focus == Focus::Ai => "· type · Enter send · Esc/Ctrl-A editor · Esc stop",
-        Screen::Editor => "· i insert · :w write · :q quit · Ctrl-B compile · Ctrl-F find · Ctrl-A ai",
+        Screen::Editor if app.focus == Focus::Preview => "· j/k/h/l scroll · +/- zoom · n/p page · 0 reset · Esc editor",
+        Screen::Editor => "· i insert · :w write · :q quit · Ctrl-B compile · Ctrl-W pane · Ctrl-F find · Ctrl-A ai",
     }
 }

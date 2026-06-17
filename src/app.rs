@@ -15,7 +15,6 @@ use crossterm::event::{Event, EventStream, KeyCode, KeyEvent, KeyEventKind, KeyM
 use futures_util::StreamExt;
 use ratatui::DefaultTerminal;
 use ratatui_image::picker::Picker;
-use ratatui_image::protocol::StatefulProtocol;
 use tokio::sync::mpsc;
 
 use crate::ai::{self, AiEvent, ChatMessage};
@@ -24,8 +23,9 @@ use crate::config::Config;
 use crate::editor::{Editor, Mode};
 use crate::finder::Finder;
 use crate::fs::{Activate, Browser};
+use crate::pdf::PdfView;
 use crate::theme::Theme;
-use crate::{pdf, ui};
+use crate::ui;
 
 const AI_SYSTEM_PROMPT: &str = "You are a concise LaTeX writing assistant embedded in a terminal \
 editor. Help with LaTeX syntax, fixing compile errors, math, and document structure. Prefer short \
@@ -61,6 +61,7 @@ pub enum Screen {
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Focus {
     Editor,
+    Preview,
     Ai,
 }
 
@@ -89,10 +90,11 @@ pub struct App {
     /// Most recently compiled PDF, shown in the preview pane.
     pub preview_pdf: Option<PathBuf>,
     /// Terminal image picker (detects graphics protocol + font size).
-    pub picker: Picker,
-    /// Rendered preview page. `RefCell` because `ratatui-image` mutates the
-    /// protocol during rendering (which borrows `&App`).
-    pub preview_protocol: RefCell<Option<StatefulProtocol>>,
+    /// `RefCell` because building image protocols happens during rendering.
+    pub picker: RefCell<Picker>,
+    /// The navigable PDF view (page/zoom/scroll). `RefCell` because
+    /// `ratatui-image` mutates the protocol during rendering (which borrows `&App`).
+    pub pdf_view: RefCell<Option<PdfView>>,
     /// First key of a pending two-key normal-mode sequence (`d`, `g`).
     pending_op: Option<char>,
     compile_rx: Option<mpsc::UnboundedReceiver<Result<CompileOutcome>>>,
@@ -135,8 +137,10 @@ impl App {
             preview_pdf: None,
             // Best-effort terminal graphics detection; halfblocks fallback works
             // anywhere if the query fails (e.g. non-interactive).
-            picker: Picker::from_query_stdio().unwrap_or_else(|_| Picker::from_fontsize((8, 16))),
-            preview_protocol: RefCell::new(None),
+            picker: RefCell::new(
+                Picker::from_query_stdio().unwrap_or_else(|_| Picker::from_fontsize((8, 16))),
+            ),
+            pdf_view: RefCell::new(None),
             pending_op: None,
             compile_rx: None,
             ai_rx: None,
@@ -196,16 +200,64 @@ impl App {
             return self.handle_finder_key(key);
         }
 
+        // Ctrl-W cycles focus between the workspace panes.
+        if matches!(self.screen, Screen::Editor) && is_ctrl(&key, 'w') {
+            self.cycle_focus();
+            return Ok(());
+        }
+
         match self.screen {
             Screen::Browser => self.handle_browser_key(key)?,
             Screen::Editor => match self.focus {
                 Focus::Ai => self.handle_ai_key(key)?,
+                Focus::Preview => self.handle_preview_key(key)?,
                 Focus::Editor => match self.editor_mode() {
                     Mode::Normal => self.handle_normal_key(key)?,
                     Mode::Insert => self.handle_insert_key(key),
                     Mode::Command => self.handle_command_key(key)?,
                 },
             },
+        }
+        Ok(())
+    }
+
+    /// Cycle keyboard focus through the visible workspace panes.
+    fn cycle_focus(&mut self) {
+        let mut order = vec![Focus::Editor];
+        if self.show_preview {
+            order.push(Focus::Preview);
+        }
+        if self.show_ai {
+            order.push(Focus::Ai);
+        }
+        let idx = order.iter().position(|f| *f == self.focus).unwrap_or(0);
+        self.focus = order[(idx + 1) % order.len()];
+    }
+
+    fn handle_preview_key(&mut self, key: KeyEvent) -> Result<()> {
+        if is_ctrl(&key, 'a') {
+            self.focus_ai();
+            return Ok(());
+        }
+        if key.code == KeyCode::Esc {
+            self.focus = Focus::Editor;
+            return Ok(());
+        }
+        let mut guard = self.pdf_view.borrow_mut();
+        let Some(view) = guard.as_mut() else { return Ok(()) };
+        match key.code {
+            KeyCode::Char('j') | KeyCode::Down => view.scroll(0, 1),
+            KeyCode::Char('k') | KeyCode::Up => view.scroll(0, -1),
+            KeyCode::Char('h') | KeyCode::Left => view.scroll(-1, 0),
+            KeyCode::Char('l') | KeyCode::Right => view.scroll(1, 0),
+            KeyCode::Char('+') | KeyCode::Char('=') => view.zoom_in(),
+            KeyCode::Char('-') | KeyCode::Char('_') => view.zoom_out(),
+            KeyCode::Char('0') => view.reset_view(),
+            KeyCode::Char('n') | KeyCode::PageDown => view.next_page(),
+            KeyCode::Char('p') | KeyCode::PageUp => view.prev_page(),
+            KeyCode::Char('g') => view.first_page(),
+            KeyCode::Char('G') => view.last_page(),
+            _ => {}
         }
         Ok(())
     }
@@ -542,8 +594,18 @@ impl App {
                 self.status = "file browser".to_string();
             }
             "make" => self.start_compile(),
-            "ai" => self.show_ai = !self.show_ai,
-            "pdf" => self.show_preview = !self.show_preview,
+            "ai" => {
+                self.show_ai = !self.show_ai;
+                if !self.show_ai && self.focus == Focus::Ai {
+                    self.focus = Focus::Editor;
+                }
+            }
+            "pdf" => {
+                self.show_preview = !self.show_preview;
+                if !self.show_preview && self.focus == Focus::Preview {
+                    self.focus = Focus::Editor;
+                }
+            }
             "" => {}
             other => self.status = format!("unknown command: :{other}"),
         }
@@ -601,14 +663,11 @@ impl App {
         self.show_preview = !self.show_preview;
     }
 
-    /// Rasterize the current preview PDF (page 1) into a renderable protocol.
+    /// Open the freshly compiled PDF in the preview pane.
     fn render_preview(&mut self) {
         let Some(pdf) = self.preview_pdf.clone() else { return };
-        match pdf::rasterize(&pdf, 1, 150) {
-            Ok(img) => {
-                let proto = self.picker.new_resize_protocol(img);
-                *self.preview_protocol.borrow_mut() = Some(proto);
-            }
+        match PdfView::open(&pdf) {
+            Ok(view) => *self.pdf_view.borrow_mut() = Some(view),
             Err(err) => self.status = format!("preview: {err}"),
         }
     }
