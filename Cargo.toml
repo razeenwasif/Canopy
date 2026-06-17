@@ -41,9 +41,10 @@ reqwest = { version = "0.12", default-features = false, features = ["json", "str
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 
-# ─── PDF rasterization for inline preview ─────────────────────────────────
-# Requires the PDFium shared library at runtime (documented in README).
-pdfium-render = "0.8"
+# ─── PDF preview: rasterize with poppler's `pdftoppm`, display inline ─────
+# `pdftoppm` (poppler-utils) converts a page to PNG; ratatui-image renders it
+# via the terminal's graphics protocol (Kitty/iTerm2/Sixel) or a halfblock
+# fallback that works in any terminal.
 
 # ─── CLI / errors ─────────────────────────────────────────────────────────
 clap = { version = "4", features = ["derive", "env"] }

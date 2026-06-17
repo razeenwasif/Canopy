@@ -6,7 +6,7 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 use ratatui::Frame;
 
-use crate::app::App;
+use crate::app::{App, Focus};
 use crate::editor::Mode;
 use crate::syntax;
 use crate::ui::pane_block;
@@ -23,7 +23,8 @@ pub fn render(app: &App, frame: &mut Frame, area: Rect) {
         .unwrap_or_else(|| "[scratch]".to_string());
     let title = format!("{}{}", name, if editor.is_dirty() { " ●" } else { "" });
 
-    let block = pane_block(&title, true, theme);
+    let focused = app.focus == Focus::Editor;
+    let block = pane_block(&title, focused, theme);
     let inner = block.inner(area);
     frame.render_widget(block, area);
 
@@ -66,8 +67,8 @@ pub fn render(app: &App, frame: &mut Frame, area: Rect) {
     }
     frame.render_widget(Paragraph::new(lines), inner);
 
-    // Hardware cursor — hidden while the `:` command line is active.
-    if editor.mode() != Mode::Command && cur_line >= scroll && cur_line < scroll + inner.height as usize {
+    // Hardware cursor — only when the editor pane is focused and not in `:` mode.
+    if focused && editor.mode() != Mode::Command && cur_line >= scroll && cur_line < scroll + inner.height as usize {
         let x = inner.x + gutter_w + cur_col as u16;
         let y = inner.y + (cur_line - scroll) as u16;
         let max_x = inner.x + inner.width.saturating_sub(1);

@@ -7,7 +7,7 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 use ratatui::Frame;
 
-use crate::app::{App, Screen};
+use crate::app::{App, Focus, Screen};
 use crate::editor::Mode;
 
 pub fn render(app: &App, frame: &mut Frame, area: Rect) {
@@ -19,7 +19,7 @@ pub fn render(app: &App, frame: &mut Frame, area: Rect) {
     spans.push(Span::styled(format!(" {label} "), block_style));
 
     // ── Editor: cursor position + line count ──
-    if let (Screen::Editor { .. }, Some(editor)) = (&app.screen, &app.editor) {
+    if let (Screen::Editor, Some(editor)) = (&app.screen, &app.editor) {
         let (line, col) = editor.cursor_line_col();
         spans.push(Span::styled(
             format!(" {}:{}  {} lines ", line + 1, col + 1, editor.rope().len_lines()),
@@ -56,7 +56,14 @@ fn mode_block(app: &App) -> (&'static str, Style) {
                 .bg(theme.fg_subtle)
                 .add_modifier(Modifier::BOLD),
         ),
-        Screen::Editor { .. } => match app.editor.as_ref().map(|e| e.mode()).unwrap_or(Mode::Normal) {
+        Screen::Editor if app.focus == Focus::Ai => (
+            "AI",
+            Style::default()
+                .fg(theme.bg)
+                .bg(theme.accent_alt)
+                .add_modifier(Modifier::BOLD),
+        ),
+        Screen::Editor => match app.editor.as_ref().map(|e| e.mode()).unwrap_or(Mode::Normal) {
             Mode::Insert => (
                 "INSERT",
                 theme.s_accent().add_modifier(Modifier::REVERSED),
@@ -82,8 +89,7 @@ fn mode_block(app: &App) -> (&'static str, Style) {
 fn hint(app: &App) -> &'static str {
     match &app.screen {
         Screen::Browser => "· j/k move · gg/G ends · Enter open · h up · q quit",
-        Screen::Editor { .. } => {
-            "· i insert · :w write · :q quit · Ctrl-B compile · Ctrl-F find · Ctrl-A ai"
-        }
+        Screen::Editor if app.focus == Focus::Ai => "· type · Enter send · Esc/Ctrl-A editor · Esc stop",
+        Screen::Editor => "· i insert · :w write · :q quit · Ctrl-B compile · Ctrl-F find · Ctrl-A ai",
     }
 }

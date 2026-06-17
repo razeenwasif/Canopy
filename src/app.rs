@@ -5,6 +5,7 @@
 //! against compile results (from a background task) with `tokio::select!`, so a
 //! long-running compile never blocks typing.
 
+use std::cell::RefCell;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -13,6 +14,8 @@ use anyhow::Result;
 use crossterm::event::{Event, EventStream, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use futures_util::StreamExt;
 use ratatui::DefaultTerminal;
+use ratatui_image::picker::Picker;
+use ratatui_image::protocol::StatefulProtocol;
 use tokio::sync::mpsc;
 
 use crate::ai::{self, AiEvent, ChatMessage};
@@ -22,7 +25,7 @@ use crate::editor::{Editor, Mode};
 use crate::finder::Finder;
 use crate::fs::{Activate, Browser};
 use crate::theme::Theme;
-use crate::ui;
+use crate::{pdf, ui};
 
 const AI_SYSTEM_PROMPT: &str = "You are a concise LaTeX writing assistant embedded in a terminal \
 editor. Help with LaTeX syntax, fixing compile errors, math, and document structure. Prefer short \
@@ -50,7 +53,15 @@ impl AiPanel {
 
 pub enum Screen {
     Browser,
-    Editor { show_preview: bool },
+    /// The Overleaf-style workspace: editor, PDF preview, and AI panel.
+    Editor,
+}
+
+/// Which pane in the editor workspace has keyboard focus.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum Focus {
+    Editor,
+    Ai,
 }
 
 pub struct App {
@@ -67,8 +78,21 @@ pub struct App {
     pub root: PathBuf,
     /// The fuzzy file finder overlay, when open.
     pub finder: Option<Finder>,
-    /// The AI assistant overlay, when open.
-    pub ai: Option<AiPanel>,
+    /// The AI assistant panel (docked on the right by default).
+    pub ai: AiPanel,
+    /// Which workspace pane has focus.
+    pub focus: Focus,
+    /// Whether the PDF preview pane is shown.
+    pub show_preview: bool,
+    /// Whether the AI panel is shown.
+    pub show_ai: bool,
+    /// Most recently compiled PDF, shown in the preview pane.
+    pub preview_pdf: Option<PathBuf>,
+    /// Terminal image picker (detects graphics protocol + font size).
+    pub picker: Picker,
+    /// Rendered preview page. `RefCell` because `ratatui-image` mutates the
+    /// protocol during rendering (which borrows `&App`).
+    pub preview_protocol: RefCell<Option<StatefulProtocol>>,
     /// First key of a pending two-key normal-mode sequence (`d`, `g`).
     pending_op: Option<char>,
     compile_rx: Option<mpsc::UnboundedReceiver<Result<CompileOutcome>>>,
@@ -85,7 +109,7 @@ impl App {
         let (screen, editor, status) = if start_path.is_file() {
             let ed = Editor::open(&start_path)?;
             (
-                Screen::Editor { show_preview: false },
+                Screen::Editor,
                 Some(ed),
                 format!("opened {}", start_path.display()),
             )
@@ -104,7 +128,15 @@ impl App {
             cmdline: String::new(),
             root,
             finder: None,
-            ai: None,
+            ai: AiPanel::new(),
+            focus: Focus::Editor,
+            show_preview: true,
+            show_ai: true,
+            preview_pdf: None,
+            // Best-effort terminal graphics detection; halfblocks fallback works
+            // anywhere if the query fails (e.g. non-interactive).
+            picker: Picker::from_query_stdio().unwrap_or_else(|_| Picker::from_fontsize((8, 16))),
+            preview_protocol: RefCell::new(None),
             pending_op: None,
             compile_rx: None,
             ai_rx: None,
@@ -121,7 +153,7 @@ impl App {
 
         while !self.should_quit {
             let size = terminal.size()?;
-            if let (Some(editor), Screen::Editor { .. }) = (&mut self.editor, &self.screen) {
+            if let (Some(editor), Screen::Editor) = (&mut self.editor, &self.screen) {
                 let viewport = size.height.saturating_sub(4) as usize; // title + borders + status
                 editor.ensure_visible(viewport);
             }
@@ -159,20 +191,20 @@ impl App {
             return Ok(());
         }
 
-        // Overlays capture all input while open.
+        // The finder overlay captures all input while open.
         if self.finder.is_some() {
             return self.handle_finder_key(key);
-        }
-        if self.ai.is_some() {
-            return self.handle_ai_key(key);
         }
 
         match self.screen {
             Screen::Browser => self.handle_browser_key(key)?,
-            Screen::Editor { .. } => match self.editor_mode() {
-                Mode::Normal => self.handle_normal_key(key)?,
-                Mode::Insert => self.handle_insert_key(key),
-                Mode::Command => self.handle_command_key(key)?,
+            Screen::Editor => match self.focus {
+                Focus::Ai => self.handle_ai_key(key)?,
+                Focus::Editor => match self.editor_mode() {
+                    Mode::Normal => self.handle_normal_key(key)?,
+                    Mode::Insert => self.handle_insert_key(key),
+                    Mode::Command => self.handle_command_key(key)?,
+                },
             },
         }
         Ok(())
@@ -194,7 +226,11 @@ impl App {
             return Ok(());
         }
         if is_ctrl(&key, 'a') {
-            self.open_ai();
+            // Jump into the AI panel if a document is open.
+            if self.editor.is_some() {
+                self.screen = Screen::Editor;
+                self.focus_ai();
+            }
             return Ok(());
         }
         match key.code {
@@ -269,45 +305,36 @@ impl App {
         Ok(())
     }
 
-    // ─── AI assistant overlay ─────────────────────────────────────────────
+    // ─── AI assistant panel (docked right) ────────────────────────────────
 
-    fn open_ai(&mut self) {
-        if self.ai.is_none() {
-            self.ai = Some(AiPanel::new());
-        }
+    /// Reveal the AI panel and move keyboard focus to it.
+    fn focus_ai(&mut self) {
+        self.show_ai = true;
+        self.focus = Focus::Ai;
     }
 
     fn handle_ai_key(&mut self, key: KeyEvent) -> Result<()> {
-        let streaming = self.ai.as_ref().map(|a| a.streaming).unwrap_or(false);
+        // Ctrl-A toggles focus back to the editor.
+        if is_ctrl(&key, 'a') {
+            self.focus = Focus::Editor;
+            return Ok(());
+        }
+        let streaming = self.ai.streaming;
         match key.code {
             KeyCode::Esc => {
                 if streaming {
                     self.cancel_ai();
                 } else {
-                    self.ai = None;
+                    self.focus = Focus::Editor;
                 }
             }
             KeyCode::Enter if !streaming => self.submit_ai(),
-            KeyCode::PageUp => {
-                if let Some(a) = self.ai.as_mut() {
-                    a.scroll = a.scroll.saturating_sub(4);
-                }
-            }
-            KeyCode::PageDown => {
-                if let Some(a) = self.ai.as_mut() {
-                    a.scroll = a.scroll.saturating_add(4);
-                }
-            }
+            KeyCode::PageUp => self.ai.scroll = self.ai.scroll.saturating_sub(4),
+            KeyCode::PageDown => self.ai.scroll = self.ai.scroll.saturating_add(4),
             KeyCode::Backspace if !streaming => {
-                if let Some(a) = self.ai.as_mut() {
-                    a.input.pop();
-                }
+                self.ai.input.pop();
             }
-            KeyCode::Char(c) if !streaming => {
-                if let Some(a) = self.ai.as_mut() {
-                    a.input.push(c);
-                }
-            }
+            KeyCode::Char(c) if !streaming => self.ai.input.push(c),
             _ => {}
         }
         Ok(())
@@ -319,16 +346,14 @@ impl App {
         }
         self.ai_cancel = None;
         self.ai_rx = None;
-        if let Some(a) = self.ai.as_mut() {
-            a.streaming = false;
-        }
+        self.ai.streaming = false;
     }
 
     fn submit_ai(&mut self) {
-        let input = match self.ai.as_mut() {
-            Some(a) if !a.input.trim().is_empty() => std::mem::take(&mut a.input),
-            _ => return,
-        };
+        if self.ai.input.trim().is_empty() {
+            return;
+        }
+        let input = std::mem::take(&mut self.ai.input);
 
         // Build the request: system prompt + current document context + history.
         let mut send = vec![ChatMessage::system(AI_SYSTEM_PROMPT)];
@@ -341,18 +366,14 @@ impl App {
                 )));
             }
         }
-        if let Some(a) = self.ai.as_ref() {
-            send.extend(a.messages.iter().cloned());
-        }
+        send.extend(self.ai.messages.iter().cloned());
         send.push(ChatMessage::user(input.clone()));
 
         // Update the displayed conversation: user turn + empty assistant turn.
-        if let Some(a) = self.ai.as_mut() {
-            a.messages.push(ChatMessage::user(input));
-            a.messages.push(ChatMessage::assistant(String::new()));
-            a.streaming = true;
-            a.scroll = 0;
-        }
+        self.ai.messages.push(ChatMessage::user(input));
+        self.ai.messages.push(ChatMessage::assistant(String::new()));
+        self.ai.streaming = true;
+        self.ai.scroll = 0;
 
         let cancel = Arc::new(AtomicBool::new(false));
         let (tx, rx) = mpsc::unbounded_channel();
@@ -366,30 +387,24 @@ impl App {
     fn handle_ai_event(&mut self, ev: AiEvent) {
         match ev {
             AiEvent::Delta(s) => {
-                if let Some(a) = self.ai.as_mut() {
-                    if let Some(last) = a.messages.last_mut() {
-                        if last.role == "assistant" {
-                            last.content.push_str(&s);
-                        }
+                if let Some(last) = self.ai.messages.last_mut() {
+                    if last.role == "assistant" {
+                        last.content.push_str(&s);
                     }
                 }
             }
             AiEvent::Done => {
                 self.ai_rx = None;
                 self.ai_cancel = None;
-                if let Some(a) = self.ai.as_mut() {
-                    a.streaming = false;
-                }
+                self.ai.streaming = false;
             }
             AiEvent::Error(e) => {
                 self.ai_rx = None;
                 self.ai_cancel = None;
-                if let Some(a) = self.ai.as_mut() {
-                    a.streaming = false;
-                    if let Some(last) = a.messages.last_mut() {
-                        if last.role == "assistant" && last.content.is_empty() {
-                            last.content = format!("[error] {e}");
-                        }
+                self.ai.streaming = false;
+                if let Some(last) = self.ai.messages.last_mut() {
+                    if last.role == "assistant" && last.content.is_empty() {
+                        last.content = format!("[error] {e}");
                     }
                 }
                 self.status = format!("ai: {e}");
@@ -527,6 +542,8 @@ impl App {
                 self.status = "file browser".to_string();
             }
             "make" => self.start_compile(),
+            "ai" => self.show_ai = !self.show_ai,
+            "pdf" => self.show_preview = !self.show_preview,
             "" => {}
             other => self.status = format!("unknown command: :{other}"),
         }
@@ -541,7 +558,7 @@ impl App {
             KeyCode::Char('b') => self.start_compile(),
             KeyCode::Char('p') => self.toggle_preview(),
             KeyCode::Char('f') => self.open_finder(),
-            KeyCode::Char('a') => self.open_ai(),
+            KeyCode::Char('a') => self.focus_ai(),
             KeyCode::Char('o') => {
                 self.screen = Screen::Browser;
                 self.status = "file browser".to_string();
@@ -565,7 +582,8 @@ impl App {
 
     fn open_file(&mut self, path: &Path) -> Result<()> {
         self.editor = Some(Editor::open(path)?);
-        self.screen = Screen::Editor { show_preview: false };
+        self.screen = Screen::Editor;
+        self.focus = Focus::Editor;
         self.status = format!("opened {}", path.display());
         Ok(())
     }
@@ -580,10 +598,18 @@ impl App {
     }
 
     fn toggle_preview(&mut self) {
-        if let Screen::Editor { show_preview } = self.screen {
-            self.screen = Screen::Editor {
-                show_preview: !show_preview,
-            };
+        self.show_preview = !self.show_preview;
+    }
+
+    /// Rasterize the current preview PDF (page 1) into a renderable protocol.
+    fn render_preview(&mut self) {
+        let Some(pdf) = self.preview_pdf.clone() else { return };
+        match pdf::rasterize(&pdf, 1, 150) {
+            Ok(img) => {
+                let proto = self.picker.new_resize_protocol(img);
+                *self.preview_protocol.borrow_mut() = Some(proto);
+            }
+            Err(err) => self.status = format!("preview: {err}"),
         }
     }
 
@@ -633,6 +659,9 @@ impl App {
                             .and_then(|p| p.file_name())
                             .map(|n| n.to_string_lossy().to_string())
                             .unwrap_or_else(|| "output.pdf".to_string());
+                        // Hand the PDF to the preview pane and rasterize page 1.
+                        self.preview_pdf = out.pdf_path.clone();
+                        self.render_preview();
                         format!("✓ compiled in {secs:.1}s → {name}")
                     }
                     CompileStatus::Failed => {

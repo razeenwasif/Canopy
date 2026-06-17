@@ -25,11 +25,15 @@ Project structure, CLI, terminal lifecycle, module seams, dependency selection.
   read-only rootfs + tmpfs `/tmp`, PID cap, non-root uid:gid)
 - capture the compiler log; surface status/duration/first error in the UI
 
-## Phase 4 — Inline PDF preview ⏳ (next)
+## Phase 4 — Inline PDF preview ✅
 
-- `pdf.rs`: rasterize PDF pages with pdfium-render
-- `ui/preview.rs`: display inline via ratatui-image, with page navigation
+- `pdf.rs`: rasterize PDF pages with `pdftoppm` (poppler)
+- `ui/preview.rs`: display inline via `ratatui-image` (graphics protocol +
+  half-block fallback)
 - auto-refresh the preview after a successful compile
+- docked in the Overleaf-style three-pane workspace (editor | preview | AI)
+
+  _Still to do here: multi-page navigation in the preview._
 
 ## Delivered extras
 

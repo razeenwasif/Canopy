@@ -37,9 +37,12 @@ Options (also via env): `--texlive-image`, `--engine`, `--timeout-secs`,
 
 ### Keys
 
-The editor is **modal** (vim-style), with a pink-accented theme modeled on Onyx,
-**LaTeX syntax highlighting**, a built-in **fuzzy file finder** (`Ctrl-F`), and a
-local **AI assistant** (`Ctrl-A`).
+The workspace is **Overleaf-style**: the editor on the left, the **PDF preview**
+in the center-right, and the **AI assistant** docked on the right. The editor is
+**modal** (vim-style) with a pink-accented theme modeled on Onyx, **LaTeX syntax
+highlighting**, and a built-in **fuzzy file finder** (`Ctrl-F`).
+
+Toggle panes with `:pdf` and `:ai` (or `Ctrl-P` for the preview).
 
 **Browser:** `j/k` move · `gg`/`G` top/bottom · `Enter`/`l` open · `h`/`Backspace` up · `/` or `Ctrl-F` fuzzy find · `q` quit
 
@@ -53,7 +56,7 @@ local **AI assistant** (`Ctrl-A`).
 
 **Command line:** `:w` write · `:q` quit · `:wq`/`:x` write & quit · `:q!` discard · `:e` browser · `:make` compile
 
-**AI assistant (`Ctrl-A`):** type a question · `Enter` send · `PgUp/PgDn` scroll · `Esc` stop/close
+**AI assistant (`Ctrl-A` to focus):** type a question · `Enter` send · `PgUp/PgDn` scroll · `Esc` (or `Ctrl-A`) back to editor · `Esc` while streaming stops it
 
 **Any mode:** `Ctrl-S` save · `Ctrl-B` compile · `Ctrl-P` toggle preview · `Ctrl-F` find · `Ctrl-A` AI · `Ctrl-C` quit
 
@@ -63,7 +66,9 @@ local **AI assistant** (`Ctrl-A`).
 - **Ollama** — for the AI assistant. Runs on `http://localhost:11434` with the
   model `gemma4:12b-it-qat` by default (override with `--ai-model` /
   `--ollama-host` or `CANOPY_AI_MODEL` / `CANOPY_OLLAMA_HOST`).
-- **PDFium** shared library — for inline PDF preview.
+- **poppler-utils** (`pdftoppm`) — to rasterize the PDF for the inline preview.
+  Best visual results in a terminal with a graphics protocol (Kitty/iTerm2/Sixel);
+  otherwise it falls back to a half-block rendering that works anywhere.
 
 ## Project structure
 
@@ -93,5 +98,5 @@ src/
 - **Phase 1** — scaffold ✅
 - **Phase 2** — editor: buffer, cursor, editing, scrolling, save, file browser ✅
 - **Phase 3** — sandboxed Docker compilation (`compile.rs`) ✅
-- **Phase 4** — inline PDF preview (`pdf.rs` + `ui/preview.rs`) ⏳
-- **Extras** — vim keybindings, pink theme, fuzzy finder, LaTeX highlighting, Ollama AI assistant ✅
+- **Phase 4** — inline PDF preview (`pdf.rs` + `ui/preview.rs`) ✅
+- **Extras** — vim keybindings, pink theme, fuzzy finder, LaTeX highlighting, Ollama AI assistant, Overleaf-style 3-pane layout ✅

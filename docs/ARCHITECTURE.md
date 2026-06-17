@@ -47,8 +47,20 @@ and reports back over a channel, so a slow compile never blocks typing.
 | `fs.rs` | File browser model: directory listing + navigation |
 | `compile.rs` | Sandboxed Docker compilation (bollard) + Docker reachability probe |
 | `ai.rs` | Local Ollama assistant: chat request shaping + async streaming |
-| `pdf.rs` | PDF page rasterization for preview (pdfium-render) |
+| `pdf.rs` | PDF page rasterization for preview (shells out to `pdftoppm`) |
 | `ui/` | Pure rendering: `title_bar`, `browser`, `editor`, `finder`, `ai`, `preview`, `status` (mode line) |
+
+## Workspace layout & focus
+
+The editor screen is an **Overleaf-style three-pane workspace**: editor (left),
+PDF preview (center-right), and AI assistant (docked right) — each toggleable
+(`:pdf`, `:ai`, `Ctrl-P`). A `Focus` enum (`Editor` / `Ai`) decides which pane
+receives keys; `Ctrl-A` moves focus to the AI input, `Esc` returns it. Only the
+focused pane shows the hardware cursor and a bold-accent border.
+
+The PDF preview rasterizes page 1 with `pdftoppm` after a successful compile and
+displays it via `ratatui-image`. The image protocol is stateful (it mutates on
+render), so it lives behind a `RefCell` to keep the render path `&App`.
 
 The `ui` layer is **pure**: it reads `App` state and paints a frame, never
 mutating. All state transitions happen in `app.rs`.

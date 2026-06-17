@@ -37,27 +37,44 @@ pub fn render(app: &App, frame: &mut Frame) {
 
     match &app.screen {
         Screen::Browser => browser::render(app, frame, outer[1]),
-        Screen::Editor { show_preview } => {
-            if *show_preview {
-                let panes = Layout::default()
-                    .direction(Direction::Horizontal)
-                    .constraints([Constraint::Percentage(55), Constraint::Percentage(45)])
-                    .split(outer[1]);
-                editor::render(app, frame, panes[0]);
-                preview::render(app, frame, panes[1]);
-            } else {
-                editor::render(app, frame, outer[1]);
-            }
-        }
+        Screen::Editor => render_workspace(app, frame, outer[1]),
     }
 
     status::render(app, frame, outer[2]);
 
-    // Overlays sit on top of everything (only one is open at a time).
+    // The finder is the only true overlay.
     if app.finder.is_some() {
         finder::render(app, frame, area);
-    } else if app.ai.is_some() {
-        ai::render(app, frame, area);
+    }
+}
+
+/// The Overleaf-style workspace: editor | PDF preview | AI panel (right).
+fn render_workspace(app: &App, frame: &mut Frame, area: Rect) {
+    // Dock the AI panel on the right.
+    let (body, ai_area) = if app.show_ai {
+        let cols = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([Constraint::Min(0), Constraint::Percentage(30)])
+            .split(area);
+        (cols[0], Some(cols[1]))
+    } else {
+        (area, None)
+    };
+
+    // Split the center into editor | PDF preview.
+    if app.show_preview {
+        let cols = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([Constraint::Percentage(55), Constraint::Percentage(45)])
+            .split(body);
+        editor::render(app, frame, cols[0]);
+        preview::render(app, frame, cols[1]);
+    } else {
+        editor::render(app, frame, body);
+    }
+
+    if let Some(ai_area) = ai_area {
+        ai::render(app, frame, ai_area);
     }
 }
 

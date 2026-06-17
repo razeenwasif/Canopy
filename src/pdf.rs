@@ -1,24 +1,36 @@
 //! PDF preview support.
 //!
-//! The compiler writes a PDF to the project directory; we rasterize the
-//! requested page to an RGBA image with `pdfium-render` and hand it to
-//! `ratatui-image`, which picks the best terminal graphics protocol available
-//! (Kitty → iTerm2 → Sixel → halfblocks fallback).
+//! Rasterizes a PDF page to an image by shelling out to poppler's `pdftoppm`
+//! (commonly installed; no extra shared library needed). `ratatui-image` then
+//! displays the image inline via the best terminal graphics protocol available.
 
 use std::path::Path;
+use std::process::Command;
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use image::DynamicImage;
 
-/// Rasterize one page (0-indexed) of a PDF file to an image at the given target
-/// width in pixels (height follows the page aspect ratio).
-///
-/// TODO(phase-4): implement with `pdfium_render::prelude::*`:
-///   Pdfium::new(Pdfium::bind_to_system_library()?)
-///     .load_pdf_from_file(path, None)?
-///     .pages().get(page)?
-///     .render_with_config(&PdfRenderConfig::new().set_target_width(width))?
-///     .as_image()
-pub fn rasterize_page(_path: &Path, _page: u16, _target_width: u16) -> Result<DynamicImage> {
-    anyhow::bail!("PDF rasterization lands in Phase 4")
+/// Rasterize one page (1-indexed) of a PDF to an image at the given DPI.
+/// `ratatui-image` downscales it to the preview pane on render, so a moderate
+/// DPI is plenty.
+pub fn rasterize(pdf: &Path, page: u32, dpi: u32) -> Result<DynamicImage> {
+    let out_prefix = std::env::temp_dir().join("canopy-preview");
+    let out_png = out_prefix.with_extension("png");
+
+    let status = Command::new("pdftoppm")
+        .args(["-png", "-singlefile", "-r", &dpi.to_string()])
+        .args(["-f", &page.to_string(), "-l", &page.to_string()])
+        .arg(pdf)
+        .arg(&out_prefix) // pdftoppm appends ".png" with -singlefile
+        .status()
+        .context("running pdftoppm — is poppler-utils installed?")?;
+
+    if !status.success() {
+        anyhow::bail!("pdftoppm failed (exit {:?})", status.code());
+    }
+
+    let img = image::open(&out_png)
+        .with_context(|| format!("reading rasterized page {}", out_png.display()))?;
+    let _ = std::fs::remove_file(&out_png);
+    Ok(img)
 }

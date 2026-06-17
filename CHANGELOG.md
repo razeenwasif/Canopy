@@ -29,7 +29,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   with a tmpfs `/tmp`, a PID cap, and execution as the host uid:gid. Captures the
   log and reports status/duration/first-error.
 - Local AI assistant (`Ctrl-A`) backed by Ollama (default `gemma4:12b-it-qat`):
-  a streaming chat overlay that includes the current document as context.
+  a streaming chat panel that includes the current document as context.
+- Overleaf-style three-pane workspace: editor (left), PDF preview (center-right),
+  and AI assistant docked on the right — each toggleable (`:pdf`, `:ai`,
+  `Ctrl-P`), with a focus model (`Ctrl-A`/`Esc`) and focused-pane borders.
+- Inline PDF preview (Phase 4): rasterizes page 1 with `pdftoppm` after a
+  successful compile and displays it via `ratatui-image` (graphics protocol with
+  a half-block fallback).
 - Line-number gutter (active line in accent) and hardware cursor positioning.
 - Sandboxed-compilation scaffolding (`compile.rs`) with a Docker reachability
   probe and the security constraints expressed in config.
