@@ -1,0 +1,11 @@
+# Rust build output
+/target/
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# Compilation scratch (temp dirs bind-mounted into TeX Live containers)
+/tmp/canopy-*
