@@ -32,11 +32,13 @@ use crate::config::Config as AppConfig;
 const MAX_PASSES: u32 = 4;
 
 /// Filename suffixes considered LaTeX build artifacts (removed on cleanup).
+// Note: `.xmpdata` is intentionally NOT here — it's a pdfx/hyperxmp *source*
+// file (PDF metadata) the user authors, not a build artifact.
 const AUX_SUFFIXES: &[&str] = &[
-    ".aux", ".bbl", ".blg", ".brf", ".bcf", ".fdb_latexmk", ".fls", ".idx", ".ilg", ".ind",
-    ".lof", ".log", ".lot", ".lol", ".loa", ".nav", ".out", ".run.xml", ".snm", ".synctex.gz",
-    ".synctex", ".toc", ".vrb", ".xdy", ".glo", ".gls", ".glg", ".acn", ".acr", ".alg", ".ist",
-    ".thm", ".spl", ".fff", ".ttt", ".los", ".soc", ".maf", ".mtc",
+    ".abs", ".aux", ".bbl", ".blg", ".brf", ".bcf", ".fdb_latexmk", ".fls", ".idx", ".ilg",
+    ".ind", ".lof", ".log", ".lot", ".lol", ".loa", ".nav", ".out", ".run.xml", ".snm",
+    ".synctex.gz", ".synctex", ".toc", ".vrb", ".xdy", ".glo", ".gls", ".glg", ".acn", ".acr",
+    ".alg", ".ist", ".thm", ".spl", ".fff", ".ttt", ".los", ".soc", ".maf", ".mtc",
 ];
 
 #[derive(Debug)]
@@ -277,17 +279,17 @@ mod tests {
         std::fs::create_dir_all(&dir).unwrap();
         let make = |n: &str| std::fs::write(dir.join(n), b"x").unwrap();
 
-        // Sources + output to keep.
-        for keep in ["main.tex", "main.pdf", "refs.bib", "fig.png", "style.sty"] {
+        // Sources + output to keep (note: .xmpdata is a pdfx source file).
+        for keep in ["main.tex", "main.pdf", "refs.bib", "fig.png", "style.sty", "main.xmpdata"] {
             make(keep);
         }
-        // Artifacts to remove (including compound suffixes).
-        for junk in ["main.aux", "main.log", "main.out", "main.toc", "main.synctex.gz", "main.run.xml", "main.fdb_latexmk"] {
+        // Artifacts to remove (including .abs and compound suffixes).
+        for junk in ["main.aux", "main.log", "main.out", "main.toc", "main.synctex.gz", "main.run.xml", "main.fdb_latexmk", "main.abs"] {
             make(junk);
         }
 
         let removed = clean_artifacts(&dir);
-        assert_eq!(removed, 7);
+        assert_eq!(removed, 8);
 
         let remaining: Vec<String> = std::fs::read_dir(&dir)
             .unwrap()
@@ -297,9 +299,11 @@ mod tests {
         assert!(remaining.contains(&"main.tex".to_string()));
         assert!(remaining.contains(&"main.pdf".to_string()));
         assert!(remaining.contains(&"refs.bib".to_string()));
+        assert!(remaining.contains(&"main.xmpdata".to_string())); // source, kept
+        assert!(!remaining.iter().any(|n| n.ends_with(".abs")));
         assert!(!remaining.iter().any(|n| n.ends_with(".aux")));
         assert!(!remaining.iter().any(|n| n.ends_with(".synctex.gz")));
-        assert_eq!(remaining.len(), 5);
+        assert_eq!(remaining.len(), 6);
 
         std::fs::remove_dir_all(&dir).ok();
     }
