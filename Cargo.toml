@@ -26,12 +26,20 @@ ropey = "1.6"
 
 # ─── Fuzzy file finder (fzf-style) ────────────────────────────────────────
 fuzzy-matcher = "0.3"
-walkdir = "2"
+# ripgrep's walker: respects .gitignore, skips hidden files and VCS dirs.
+ignore = "0.4"
 
 # ─── Sandboxed compilation: drive the Docker Engine API directly ──────────
 # Spins up an ephemeral TeX Live container with network=none, a memory cap,
 # and a hard timeout — the security model from the original design, run locally.
 bollard = "0.18"
+# Run the container as the host uid:gid so outputs aren't root-owned.
+libc = "0.2"
+
+# ─── Local AI assistant via Ollama (loopback HTTP, streaming) ─────────────
+reqwest = { version = "0.12", default-features = false, features = ["json", "stream", "rustls-tls"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
 
 # ─── PDF rasterization for inline preview ─────────────────────────────────
 # Requires the PDFium shared library at runtime (documented in README).

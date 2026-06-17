@@ -17,24 +17,31 @@ Project structure, CLI, terminal lifecycle, module seams, dependency selection.
 - line-number gutter + hardware cursor positioning
 - unit tests for the editing logic
 
-## Phase 3 — Sandboxed compilation ⏳ (next)
+## Phase 3 — Sandboxed compilation ✅
 
 - `compile.rs`: bollard container lifecycle
 - bind-mount the project dir, run the TeX engine with the security constraints
-  (`network:none`, memory cap, timeout, dropped caps, read-only rootfs)
-- stream/capture the compiler log
-- surface status + errors in the UI
+  (`network:none`, memory cap + swap off, timeout-with-kill, dropped caps,
+  read-only rootfs + tmpfs `/tmp`, PID cap, non-root uid:gid)
+- capture the compiler log; surface status/duration/first error in the UI
 
-## Phase 4 — Inline PDF preview
+## Phase 4 — Inline PDF preview ⏳ (next)
 
 - `pdf.rs`: rasterize PDF pages with pdfium-render
 - `ui/preview.rs`: display inline via ratatui-image, with page navigation
 - auto-refresh the preview after a successful compile
 
+## Delivered extras
+
+- Vim-style modal editing
+- Pink theme modeled on Onyx
+- Fuzzy file finder (`Ctrl-F`)
+- LaTeX syntax highlighting
+- Local AI assistant via Ollama (`Ctrl-A`)
+
 ## Possible later work
 
-- LaTeX syntax highlighting in the editor
-- jump-to-error from the compiler log (SyncTeX)
-- search/replace, undo/redo
+- Surface the full compiler log in a scrollable pane; jump-to-error (SyncTeX)
+- search/replace, undo/redo, Visual mode
 - multi-file projects with `\input`/`\include` awareness
-- configurable keybindings
+- let the AI assistant apply edits to the buffer directly

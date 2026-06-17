@@ -12,20 +12,29 @@ pub struct Config {
     pub timeout: Duration,
     /// Container memory limit, in bytes.
     pub memory_bytes: i64,
+    /// Ollama model for the AI assistant.
+    pub ai_model: String,
+    /// Ollama host (loopback HTTP).
+    pub ollama_host: String,
 }
 
 impl Config {
+    #[allow(clippy::too_many_arguments)]
     pub fn from_cli(
         texlive_image: String,
         engine: String,
         timeout_secs: u64,
         memory_bytes: i64,
+        ai_model: String,
+        ollama_host: String,
     ) -> Self {
         Self {
             texlive_image,
             engine,
             timeout: Duration::from_secs(timeout_secs),
             memory_bytes,
+            ai_model,
+            ollama_host,
         }
     }
 }

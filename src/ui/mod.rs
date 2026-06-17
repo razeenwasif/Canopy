@@ -2,6 +2,7 @@
 //! never mutating state. Layout mirrors Onyx: a one-row title bar on top, a
 //! one-row mode/status line on the bottom, and the body in between.
 
+mod ai;
 mod browser;
 mod editor;
 mod finder;
@@ -52,9 +53,11 @@ pub fn render(app: &App, frame: &mut Frame) {
 
     status::render(app, frame, outer[2]);
 
-    // Fuzzy finder overlay sits on top of everything.
+    // Overlays sit on top of everything (only one is open at a time).
     if app.finder.is_some() {
         finder::render(app, frame, area);
+    } else if app.ai.is_some() {
+        ai::render(app, frame, area);
     }
 }
 

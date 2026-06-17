@@ -10,6 +10,7 @@
 //! compilation (`compile`) and inline PDF preview (`pdf`) are scaffolded with
 //! `TODO(phase-N)` markers and filled in next.
 
+mod ai;
 mod app;
 mod compile;
 mod config;
@@ -50,6 +51,14 @@ struct Cli {
     /// Container memory limit (bytes). Defaults to 512 MiB.
     #[arg(long, env = "CANOPY_COMPILE_MEMORY", default_value_t = 512 * 1024 * 1024)]
     memory_bytes: i64,
+
+    /// Ollama model for the AI assistant (Ctrl-A).
+    #[arg(long, env = "CANOPY_AI_MODEL", default_value = "gemma4:12b-it-qat")]
+    ai_model: String,
+
+    /// Ollama host (loopback HTTP).
+    #[arg(long, env = "CANOPY_OLLAMA_HOST", default_value = "http://localhost:11434")]
+    ollama_host: String,
 }
 
 #[tokio::main]
@@ -60,6 +69,8 @@ async fn main() -> Result<()> {
         cli.engine,
         cli.timeout_secs,
         cli.memory_bytes,
+        cli.ai_model,
+        cli.ollama_host,
     );
 
     let start_path = match cli.path {

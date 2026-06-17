@@ -42,12 +42,13 @@ and reports back over a channel, so a slow compile never blocks typing.
 | `theme.rs` | Color palette (pink accent) + style helpers |
 | `app.rs` | State machine (Browser ⨉ Editor) + modal key dispatch + `select!` loop |
 | `editor/` | The text model: ropey buffer, cursor, movement, editing, save; `modes.rs` holds the vim `Mode` enum |
-| `finder.rs` | fzf-style fuzzy file finder: recursive walk + SkimMatcherV2 ranking |
+| `finder.rs` | fzf-style fuzzy file finder: gitignore-aware walk (`ignore` crate) + SkimMatcherV2 ranking, scoped to the enclosing git repo |
 | `syntax.rs` | Lightweight per-line LaTeX syntax highlighter |
 | `fs.rs` | File browser model: directory listing + navigation |
 | `compile.rs` | Sandboxed Docker compilation (bollard) + Docker reachability probe |
+| `ai.rs` | Local Ollama assistant: chat request shaping + async streaming |
 | `pdf.rs` | PDF page rasterization for preview (pdfium-render) |
-| `ui/` | Pure rendering: `title_bar`, `browser`, `editor`, `preview`, `status` (mode line) |
+| `ui/` | Pure rendering: `title_bar`, `browser`, `editor`, `finder`, `ai`, `preview`, `status` (mode line) |
 
 The `ui` layer is **pure**: it reads `App` state and paints a frame, never
 mutating. All state transitions happen in `app.rs`.
@@ -82,13 +83,29 @@ arbitrary code execution. Canopy **never** runs it on the host. Each compile
 runs in a fresh, ephemeral TeX Live container configured with:
 
 - `NetworkMode: "none"` — no network, no data exfiltration
-- a hard **memory limit** (default 512 MiB, swap disabled)
-- a hard **wall-clock timeout** (default 40s; the container is killed on elapse)
-- **all Linux capabilities dropped** and a **read-only root filesystem**
+- a hard **memory limit** (default 512 MiB, `memory_swap == memory` so swap is off)
+- a hard **wall-clock timeout** (default 40s; `wait` is wrapped in
+  `tokio::time::timeout`, and the container is **killed** on elapse → `Timeout`)
+- **all Linux capabilities dropped**, a **read-only root filesystem** with a
+  small **tmpfs `/tmp`**, and a **PID cap**
+- the engine runs with `-no-shell-escape` (forbids `\write18`) as the host
+  **uid:gid**, so output files aren't root-owned
 
 The project directory is bind-mounted read-write as `/work`; the engine writes
-`<stem>.pdf` there, which the host reads back before the container is destroyed.
-These limits are defined in `config.rs` and applied in `compile.rs`.
+`<stem>.pdf` there, which the host reads back before the container is destroyed
+(cleanup runs even on error). These limits are defined in `config.rs` and applied
+in `compile.rs`.
+
+## AI assistant
+
+`ai.rs` talks to a local **Ollama** server over loopback HTTP (default
+`gemma4:12b-it-qat` at `http://localhost:11434`). On submit, `app.rs` spawns a
+task that streams `/api/chat` (newline-delimited JSON); deltas flow back over an
+mpsc channel and are appended to the assistant's message — the same channel
+pattern as compilation, so a slow first token (weight load) never blocks the UI.
+Requests carry a system prompt plus the current document as context, and can be
+cancelled mid-stream (an `AtomicBool` checked between chunks). Because Ollama is
+local, this preserves the "no network dependency" property.
 
 ## PDF preview
 

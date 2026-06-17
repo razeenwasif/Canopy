@@ -83,7 +83,7 @@ fn hint(app: &App) -> &'static str {
     match &app.screen {
         Screen::Browser => "· j/k move · gg/G ends · Enter open · h up · q quit",
         Screen::Editor { .. } => {
-            "· i insert · :w write · :q quit · Ctrl-B compile · Ctrl-P preview · Ctrl-O files"
+            "· i insert · :w write · :q quit · Ctrl-B compile · Ctrl-F find · Ctrl-A ai"
         }
     }
 }

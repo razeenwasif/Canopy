@@ -38,7 +38,8 @@ Options (also via env): `--texlive-image`, `--engine`, `--timeout-secs`,
 ### Keys
 
 The editor is **modal** (vim-style), with a pink-accented theme modeled on Onyx,
-**LaTeX syntax highlighting**, and a built-in **fuzzy file finder** (`Ctrl-F`).
+**LaTeX syntax highlighting**, a built-in **fuzzy file finder** (`Ctrl-F`), and a
+local **AI assistant** (`Ctrl-A`).
 
 **Browser:** `j/k` move · `gg`/`G` top/bottom · `Enter`/`l` open · `h`/`Backspace` up · `/` or `Ctrl-F` fuzzy find · `q` quit
 
@@ -52,11 +53,16 @@ The editor is **modal** (vim-style), with a pink-accented theme modeled on Onyx,
 
 **Command line:** `:w` write · `:q` quit · `:wq`/`:x` write & quit · `:q!` discard · `:e` browser · `:make` compile
 
-**Any mode:** `Ctrl-S` save · `Ctrl-B` compile · `Ctrl-P` toggle preview · `Ctrl-C` quit
+**AI assistant (`Ctrl-A`):** type a question · `Enter` send · `PgUp/PgDn` scroll · `Esc` stop/close
+
+**Any mode:** `Ctrl-S` save · `Ctrl-B` compile · `Ctrl-P` toggle preview · `Ctrl-F` find · `Ctrl-A` AI · `Ctrl-C` quit
 
 ## Runtime requirements
 
 - **Docker** — for compilation (the editor works without it; compile is disabled).
+- **Ollama** — for the AI assistant. Runs on `http://localhost:11434` with the
+  model `gemma4:12b-it-qat` by default (override with `--ai-model` /
+  `--ollama-host` or `CANOPY_AI_MODEL` / `CANOPY_OLLAMA_HOST`).
 - **PDFium** shared library — for inline PDF preview.
 
 ## Project structure
@@ -64,13 +70,15 @@ The editor is **modal** (vim-style), with a pink-accented theme modeled on Onyx,
 ```
 src/
 ├── main.rs        # CLI + terminal lifecycle
-├── config.rs      # compile settings (image, engine, timeout, memory)
-├── app.rs         # state machine + event loop (input ⨉ compile results)
-├── editor/mod.rs  # ropey-backed buffer: cursor, editing, scrolling, save
-├── fs.rs          # file browser model
+├── config.rs      # compile + AI settings
+├── app.rs         # state machine + modal dispatch + event loop
+├── editor/        # ropey-backed buffer + vim modes
+├── finder.rs      # fuzzy file finder (SkimMatcherV2)
+├── syntax.rs      # LaTeX syntax highlighting
 ├── compile.rs     # sandboxed Docker compilation (bollard)
+├── ai.rs          # local Ollama assistant (streaming)
 ├── pdf.rs         # PDF rasterization for preview (pdfium-render)
-└── ui/            # ratatui rendering: browser, editor, preview
+└── ui/            # ratatui rendering: title_bar, browser, editor, finder, ai, preview, status
 ```
 
 ## Documentation
@@ -84,5 +92,6 @@ src/
 
 - **Phase 1** — scaffold ✅
 - **Phase 2** — editor: buffer, cursor, editing, scrolling, save, file browser ✅
-- **Phase 3** — sandboxed Docker compilation (`compile.rs` body) ⏳
-- **Phase 4** — inline PDF preview (`pdf.rs` + `ui/preview.rs`)
+- **Phase 3** — sandboxed Docker compilation (`compile.rs`) ✅
+- **Phase 4** — inline PDF preview (`pdf.rs` + `ui/preview.rs`) ⏳
+- **Extras** — vim keybindings, pink theme, fuzzy finder, LaTeX highlighting, Ollama AI assistant ✅

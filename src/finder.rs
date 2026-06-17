@@ -8,13 +8,25 @@ use std::path::{Path, PathBuf};
 
 use fuzzy_matcher::skim::SkimMatcherV2;
 use fuzzy_matcher::FuzzyMatcher;
-use walkdir::WalkDir;
+use ignore::WalkBuilder;
 
-/// Directory names skipped while walking (build output, VCS, deps).
-const SKIP_DIRS: &[&str] = &[".git", "target", "node_modules", ".cache"];
+/// Heavy directories pruned regardless of `.gitignore` (build output, deps,
+/// virtualenvs) so the finder stays focused on source files. `.git` and hidden
+/// entries are already skipped by the `ignore` walker.
+const SKIP_DIRS: &[&str] = &[
+    "target",
+    "node_modules",
+    "venv",
+    ".venv",
+    "envs",
+    "__pycache__",
+    "dist",
+    "build",
+    ".next",
+];
 
 /// Cap the candidate list so very large trees stay responsive.
-const MAX_CANDIDATES: usize = 10_000;
+const MAX_CANDIDATES: usize = 50_000;
 /// Cap the number of results rendered.
 const MAX_MATCHES: usize = 200;
 
@@ -29,15 +41,22 @@ pub struct Finder {
 }
 
 impl Finder {
-    /// Build a finder rooted at `root`, walking it for files.
+    /// Build a finder rooted at `root`, walking it for files. Respects
+    /// `.gitignore`, skips hidden files and VCS dirs (via the `ignore` crate),
+    /// and additionally prunes heavy build/dep/venv directories.
     pub fn new(root: &Path) -> Self {
         let mut candidates = Vec::new();
-        for entry in WalkDir::new(root)
-            .into_iter()
+        let walker = WalkBuilder::new(root)
+            .hidden(true) // skip dotfiles/dirs
+            .git_ignore(true) // respect .gitignore
+            .git_global(true)
+            .git_exclude(true)
+            .parents(true) // honor .gitignore in parent dirs
             .filter_entry(|e| !is_skipped(e.file_name().to_str()))
-            .filter_map(Result::ok)
-        {
-            if entry.file_type().is_file() {
+            .build();
+
+        for entry in walker.flatten() {
+            if entry.file_type().is_some_and(|t| t.is_file()) {
                 candidates.push(entry.into_path());
                 if candidates.len() >= MAX_CANDIDATES {
                     break;
@@ -127,8 +146,5 @@ impl Finder {
 }
 
 fn is_skipped(name: Option<&str>) -> bool {
-    match name {
-        Some(n) => SKIP_DIRS.contains(&n) || (n.starts_with('.') && n.len() > 1 && n != ".."),
-        None => false,
-    }
+    name.is_some_and(|n| SKIP_DIRS.contains(&n))
 }
