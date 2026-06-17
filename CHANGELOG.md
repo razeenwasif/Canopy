@@ -23,6 +23,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   dirs, virtualenvs, and build output so it stays focused on project source.
 - LaTeX syntax highlighting: a lightweight per-line tokenizer coloring commands,
   comments, inline math, and grouping with the theme palette.
+- Multi-pass compilation + artifact cleanup: the engine re-runs until
+  cross-references/TOC stabilize (sharing one hard timeout), then auxiliary files
+  (`.aux`, `.log`, `.toc`, `.synctex.gz`, …) are removed automatically on success,
+  leaving the PDF and sources. Disable with `--keep-artifacts`.
 - Sandboxed Docker compilation (Phase 3): runs the TeX engine in an ephemeral
   container with `network:none`, a memory cap (swap off), a hard timeout enforced
   by killing the container, all capabilities dropped, a read-only root filesystem

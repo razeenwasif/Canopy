@@ -59,6 +59,10 @@ struct Cli {
     /// Ollama host (loopback HTTP).
     #[arg(long, env = "CANOPY_OLLAMA_HOST", default_value = "http://localhost:11434")]
     ollama_host: String,
+
+    /// Keep LaTeX auxiliary files after compiling (default: clean them up).
+    #[arg(long, env = "CANOPY_KEEP_ARTIFACTS")]
+    keep_artifacts: bool,
 }
 
 #[tokio::main]
@@ -71,6 +75,7 @@ async fn main() -> Result<()> {
         cli.memory_bytes,
         cli.ai_model,
         cli.ollama_host,
+        !cli.keep_artifacts,
     );
 
     let start_path = match cli.path {

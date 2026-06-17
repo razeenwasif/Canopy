@@ -16,6 +16,8 @@ pub struct Config {
     pub ai_model: String,
     /// Ollama host (loopback HTTP).
     pub ollama_host: String,
+    /// Remove LaTeX auxiliary files after a successful compile (keep the PDF).
+    pub clean_artifacts: bool,
 }
 
 impl Config {
@@ -27,6 +29,7 @@ impl Config {
         memory_bytes: i64,
         ai_model: String,
         ollama_host: String,
+        clean_artifacts: bool,
     ) -> Self {
         Self {
             texlive_image,
@@ -35,6 +38,7 @@ impl Config {
             memory_bytes,
             ai_model,
             ollama_host,
+            clean_artifacts,
         }
     }
 }

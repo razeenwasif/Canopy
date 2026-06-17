@@ -112,6 +112,14 @@ The project directory is bind-mounted read-write as `/work`; the engine writes
 (cleanup runs even on error). These limits are defined in `config.rs` and applied
 in `compile.rs`.
 
+**Passes & cleanup.** The engine is re-run (fresh container each pass, sharing
+the bind-mounted `.aux` on the host) until the `.log` stops asking to "rerun",
+up to `MAX_PASSES`, so cross-references and the TOC resolve within one compile.
+All passes share the single hard timeout. On success, `clean_artifacts` removes
+LaTeX auxiliary files (`.aux`, `.log`, `.toc`, `.synctex.gz`, …) from the project
+directory, keeping the PDF and sources (disable with `--keep-artifacts`).
+Bibliographies (bibtex/biber) are not yet run between passes — a known gap.
+
 ## AI assistant
 
 `ai.rs` talks to a local **Ollama** server over loopback HTTP (default

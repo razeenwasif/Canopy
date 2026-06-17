@@ -18,6 +18,12 @@ never runs it on the host. Each compile spins up a fresh TeX Live container with
 The project directory is bind-mounted as the working dir; the PDF is read back
 out and the container is destroyed.
 
+The engine is re-run until cross-references and the table of contents stabilize,
+so they resolve in a single compile. Afterwards the auxiliary files (`.aux`,
+`.log`, `.toc`, `.synctex.gz`, …) are cleaned up automatically, leaving just the
+PDF and your sources. Pass `--keep-artifacts` (or `CANOPY_KEEP_ARTIFACTS=1`) to
+disable the cleanup.
+
 ## Install
 
 ```bash
@@ -33,7 +39,7 @@ canopy ./thesis/       # browse a directory
 ```
 
 Options (also via env): `--texlive-image`, `--engine`, `--timeout-secs`,
-`--memory-bytes`.
+`--memory-bytes`, `--keep-artifacts`, `--ai-model`, `--ollama-host`.
 
 ### Keys
 
